@@ -2,5 +2,5 @@ data
 .conda
 chroma
 chroma.log
-
+.env
 __pycache__

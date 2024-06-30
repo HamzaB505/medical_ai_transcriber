@@ -1,54 +1,48 @@
 import argparse
-from langchain.vectorstores.chroma import Chroma
+from langchain_community.vectorstores.chroma import Chroma
 from langchain.prompts import ChatPromptTemplate
 from langchain_community.llms.ollama import Ollama
 
-from _get_embedding_func import get_embedding_function
-
-CHROMA_PATH = "chroma"
+from llm import get_embedding_function, query_llm
+import logging
 
 PROMPT_TEMPLATE = """
 Answer the question based only on the following context:
 
 {context}
-
 ---
 
 Answer the question based on the above context: {question}
 """
 
-
-def main():
-    # Create CLI.
-    parser = argparse.ArgumentParser()
-    parser.add_argument("query_text", type=str, help="The query text.")
-    args = parser.parse_args()
-    query_text = args.query_text
-    embedding_function = get_embedding_function()
-    query_rag(query_text, embedding_function)
+logger = logging.getLogger(__name__)
 
 
-def query_rag(query_text: str, embedding_function):
+def query_rag(query_text: str,
+              embedding_function,
+              CHROMA_PATH):
     # Prepare the DB.
 
     db = Chroma(persist_directory=CHROMA_PATH, embedding_function=embedding_function)
 
     # Search the DB.
+    logger.info("Searching for TOP 5 best results.....")
     results = db.similarity_search_with_score(query_text, k=5)
-
     context_text = "\n\n---\n\n".join([doc.page_content for doc, _score in results])
     prompt_template = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
     prompt = prompt_template.format(context=context_text, question=query_text)
+    logger.info("Prompt prepared !")
     # print(prompt)
 
-    model = Ollama(model="mistral")
-    response_text = model.invoke(prompt)
-
+    # Invoking model
+    logger.info("Invoking model")
+    output = query_llm({
+	"inputs": prompt,
+    })
     sources = [doc.metadata.get("id", None) for doc, _score in results]
-    formatted_response = f"Response: {response_text}\nSources: {sources}"
+    formatted_response = f"""Response: {output[0]["generated_text"]} \n\n Sources: {sources}"""
+    print("##################### Answer ################")
     print(formatted_response)
-    return response_text
 
+    return formatted_response
 
-if __name__ == "__main__":
-    main()
